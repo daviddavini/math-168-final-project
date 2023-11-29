@@ -59,8 +59,3 @@ def networkx_graph(N):
     add_avg_velocity(G, N)
     # print(G.nodes[0])
     return G
-
-G = networkx_graph(1026)
-labels = nx.get_node_attributes(G, 'Fwy') 
-nx.draw(G, labels=labels)
-plt.show()
