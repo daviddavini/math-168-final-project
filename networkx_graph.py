@@ -3,7 +3,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-def weight_matrix(file_path, sigma2=0.1, epsilon=0.5, scaling=True):
+def _weight_matrix(file_path, sigma2=0.1, epsilon=0.5, scaling=True):
     '''
     Load weight matrix function.
     :param file_path: str, the path of saved weight matrix file.
@@ -30,6 +30,12 @@ def weight_matrix(file_path, sigma2=0.1, epsilon=0.5, scaling=True):
         return np.exp(-W2 / sigma2) * (np.exp(-W2 / sigma2) >= epsilon) * W_mask
     else:
         return W
+    
+def weight_matrix(file_path, weighted=True):
+    W = _weight_matrix(file_path)
+    if not weighted:
+        W[W > 0] = 1
+    return W
 # A = weight_matrix('STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_W_228.csv')
 # plt.imshow(A, cmap="YlGnBu")
 # plt.colorbar()
@@ -50,9 +56,9 @@ def add_avg_velocity(G, N):
     nx.set_node_attributes(G, V_avg, 'avg_speed')
 
 
-def networkx_graph(N):
+def networkx_graph(N, weighted=True):
     assert N in [228, 1026]
-    A = weight_matrix(f'STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_W_{N}.csv')
+    A = weight_matrix(f'STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_W_{N}.csv', weighted=weighted)
     G = nx.from_numpy_array(A)
     if N == 228:
         add_station_info(G)

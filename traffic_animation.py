@@ -30,7 +30,11 @@ latitude_max = np.ceil(latitude_max * 100) / 100
 print(longitude_min, longitude_max)
 print(latitude_min, latitude_max)
 
-V = pd.read_csv('STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_V_228.csv', header=None).values
+def speed_matrix(N):
+    assert N in [228, 1026]
+    return pd.read_csv(f'STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_V_{N}.csv', header=None).values
+
+V = speed_matrix(228)
 
 def setup_map_plot():
     # plot the map
@@ -62,6 +66,19 @@ def plot_map_connections():
     plt.title(f"Map of 228-node Graph with Edge Connections")
 
     plt.savefig('map_connections.png', dpi=300)
+    plt.clf()
+
+def map_values(c, label, title, filename):
+    setup_map_plot()
+    # plot all of the stations
+    plt.scatter(info['Longitude'], info['Latitude'], s=50, c=c, edgecolor='black', vmin=0, vmax=c.max())
+
+    cbar = plt.colorbar(fraction=0.025)
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.set_label(label, rotation=270)
+    plt.title(title)
+
+    plt.savefig(filename, dpi=300)
     plt.clf()
 
 def plot_average_speed():
