@@ -1,10 +1,15 @@
 import datetime
+import time
+import matplotlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.animation import FuncAnimation
-from networkx_graph import networkx_graph
+from networkx_graph import networkx_graph, speed_matrix
+
+import os
+data_dir = "images"
 
 info = pd.read_csv('STGCN_IJCAI-18-master/dataset/PeMSD7_M_Station_Info.csv')
 # print(info.head())
@@ -30,11 +35,17 @@ latitude_max = np.ceil(latitude_max * 100) / 100
 print(longitude_min, longitude_max)
 print(latitude_min, latitude_max)
 
-def speed_matrix(N):
-    assert N in [228, 1026]
-    return pd.read_csv(f'STGCN_IJCAI-18-master/dataset/PeMSD7_Full/PeMSD7_V_{N}.csv', header=None).values
-
 V = speed_matrix(228)
+
+def avg_day_speed_matrix(N):
+    V = speed_matrix(228)
+    V = V.reshape(-1, 288, 228).mean(axis=0)
+    return V
+avg_day_speeds = avg_day_speed_matrix(228)
+
+def avg_day_speed_at_time(hours, minutes):
+    frame_number = (hours * 60 + minutes) // 5
+    return avg_day_speeds[frame_number]
 
 def setup_map_plot():
     # plot the map
@@ -65,7 +76,7 @@ def plot_map_connections():
 
     plt.title(f"Map of 228-node Graph with Edge Connections")
 
-    plt.savefig('map_connections.png', dpi=300)
+    plt.savefig(os.path.join(data_dir, 'map_connections.png'), dpi=300)
     plt.clf()
 
 def map_values(c, label, title, filename):
@@ -78,21 +89,45 @@ def map_values(c, label, title, filename):
     cbar.set_label(label, rotation=270)
     plt.title(title)
 
-    plt.savefig(filename, dpi=300)
+    plt.savefig(os.path.join(data_dir, filename), dpi=300)
     plt.clf()
 
-def plot_average_speed():
+def map_speeds(speeds, label, title, filename):
     setup_map_plot()
     # plot all of the stations
-    plt.scatter(info['Longitude'], info['Latitude'], s=50, c=V.mean(axis=0), cmap='RdYlGn', edgecolor='black', vmin=0, vmax=V.max())
+    plt.scatter(info['Longitude'], info['Latitude'], s=50, c=speeds, cmap='RdYlGn', edgecolor='black', vmin=0, vmax=V.max())
 
     cbar = plt.colorbar(fraction=0.025)
     cbar.ax.get_yaxis().labelpad = 15
-    cbar.set_label("Average Speed (mph)",rotation=270)
-    plt.title("Average Speed of All Stations")
+    cbar.set_label(label,rotation=270)
+    plt.title(title)
 
-    plt.savefig('map_average_speed.png', dpi=300)
+    plt.savefig(os.path.join(data_dir, filename), dpi=300)
     plt.clf()
+
+def map_average_speed():
+    map_speeds(V.mean(axis=0), "Average Speed (mph)", "Average Speed of All Stations", "map_average_speed.png")
+
+def map_speeds_at_time(hours, minutes):
+    frame_number = (hours * 60 + minutes) // 5
+    map_speeds(avg_day_speeds[frame_number], "Speed (mph)", f"Speed of all stations at {hours:02d}:{minutes:02d}", f"map_speeds_{hours:02d}_{minutes:02d}.png")
+
+def frame_to_time(frame_number):
+    datapoint = frame_number
+    weekdays = datapoint // 288
+    minutes = (datapoint % 288) * 5
+    weekends = weekdays // 5
+    days = weekdays + weekends * 2
+    dt = datetime.datetime(2012, 5, 1) + datetime.timedelta(days=days, minutes=minutes)
+    return dt
+
+# def time_to_frame(dt):
+#     days = (dt - datetime.datetime(2012, 5, 1)).days
+#     minutes = dt.hour * 60 + dt.minute
+#     weekdays = days % 7
+#     weekends = days // 7
+#     datapoint = weekdays * 288 + minutes // 5 + weekends * 288 * 5
+#     return datapoint
 
 def animate_map_values(V):
     fig = plt.figure()
@@ -111,22 +146,45 @@ def animate_map_values(V):
     frame_count = 288 * 3 # len(V)
     scale = 3
 
-    def frame_to_time(frame_number):
-        datapoint = frame_number
-        weekdays = datapoint // 288
-        minutes = (datapoint % 288) * 5
-        weekends = weekdays // 5
-        days = weekdays + weekends * 2
-        dt = datetime.datetime(2012, 5, 1) + datetime.timedelta(days=days, minutes=minutes)
-        return dt.strftime("%A %B %d, %Y %I:%M %p")
-
     def update(frame_number):
         # scat.set_sizes(V[frame_number] * scale)
         scat.set_array(V[frame_number])
-        plt.title(frame_to_time(frame_number))
+        plt.title(frame_to_time(frame_number).strftime("%A %B %d, %Y %I:%M %p"))
 
     ani = FuncAnimation(fig, update, interval=1000/fps, save_count=frame_count)
-    ani.save('animation.mp4')
+    ani.save(os.path.join(data_dir, 'animation.mp4'))
 
-plot_average_speed()
+map_average_speed()
 plot_map_connections()
+map_speeds_at_time(7, 50)
+map_speeds_at_time(17, 30)
+map_speeds_at_time(5, 20)
+map_speeds_at_time(13, 10)
+map_speeds_at_time(21, 50)
+
+def plot_speed_24_hours():
+    # time in minutes
+    X = np.arange(0, 288 * 5, 5)
+    plt.plot(X, avg_day_speeds.mean(axis=1))
+    plt.xlabel("Time of day (minutes)")
+    plt.ylabel("Average speed (mph)")
+    plt.title("Average speed vs time of day", pad=15) 
+    formatter = matplotlib.ticker.FuncFormatter(lambda ms, x: time.strftime('%H:%M', time.gmtime(ms * 60)))
+    plt.xticks(np.arange(0, 60*25, 3*60))
+    plt.gca().xaxis.set_major_formatter(formatter)
+
+    # Plot vertical lines
+    def plot_vertical_line(hours, minutes, color):
+        plt.axvline(x=hours*60+minutes, color=color, linestyle='--')
+        plt.text(hours*60+minutes, plt.ylim()[1], f'{hours:02d}:{minutes:02d}', color=color, ha='center', va='bottom')
+
+    plot_vertical_line(7, 50, 'red')
+    plot_vertical_line(17, 30, 'red')
+    plot_vertical_line(5, 20, 'green')
+    plot_vertical_line(13, 10, 'green')
+    plot_vertical_line(21, 50, 'green')
+
+    plt.savefig(os.path.join(data_dir, 'speed_24_hours.png'), dpi=300)
+    plt.clf()
+
+plot_speed_24_hours()
